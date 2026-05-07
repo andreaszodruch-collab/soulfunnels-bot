@@ -19,35 +19,31 @@ ACCOUNTS = [
 SEND_TIME = "06:00"
 
 def scrape_account(username):
-    run_url = "https://api.apify.com/v2/acts/apify~instagram-scraper/runs"
+    url = "https://api.apify.com/v2/acts/apify~instagram-scraper/run-sync-get-dataset-items"
     payload = {
         "directUrls": [f"https://www.instagram.com/{username}/"],
         "resultsType": "posts",
         "resultsLimit": 3,
+        "addParentData": False,
     }
-    r = requests.post(run_url, json=payload, params={"token": APIFY_TOKEN}, timeout=30)
-    run_id = r.json().get("data", {}).get("id")
-    if not run_id:
-        return []
-
-    for _ in range(36):
-        time.sleep(5)
-        status_r = requests.get(
-            f"https://api.apify.com/v2/acts/apify~instagram-scraper/runs/{run_id}",
-            params={"token": APIFY_TOKEN}, timeout=15
+    try:
+        r = requests.post(
+            url,
+            json=payload,
+            params={"token": APIFY_TOKEN, "timeout": 120},
+            timeout=180
         )
-        status = status_r.json().get("data", {}).get("status", "")
-        if status == "SUCCEEDED":
-            break
-        if status in ("FAILED", "ABORTED", "TIMED-OUT"):
+        print(f"   Apify Status Code: {r.status_code}")
+        data = r.json()
+        if isinstance(data, list):
+            print(f"   Gefunden: {len(data)} Posts")
+            return data
+        else:
+            print(f"   Apify Antwort: {str(data)[:300]}")
             return []
-
-    dataset_id = status_r.json().get("data", {}).get("defaultDatasetId", "")
-    items_r = requests.get(
-        f"https://api.apify.com/v2/datasets/{dataset_id}/items",
-        params={"token": APIFY_TOKEN}, timeout=15
-    )
-    return items_r.json() if isinstance(items_r.json(), list) else []
+    except Exception as e:
+        print(f"   Scraping Fehler bei @{username}: {e}")
+        return []
 
 def analyse_mit_claude(posts_zusammenfassung):
     try:
@@ -81,8 +77,11 @@ DEINE 3 CONTENT-IDEEN:
 2. [Titel] - Format: Carousel - CTA: KEYWORD
 3. [Titel] - Format: Post - CTA: KEYWORD
 
-HEUTIGER HOOK FUER ANDREA:
-[Fertiger Hook-Satz]"""
+HEUTIGER STÄRKSTER HOOK FÜR ANDREA:
+[Fertiger Hook-Satz]
+
+STÄRKSTER POST HEUTE:
+[Nummer + kurze Begründung warum]"""
             }]
         }
         r = requests.post("https://api.anthropic.com/v1/messages", headers=headers, json=body, timeout=30)
